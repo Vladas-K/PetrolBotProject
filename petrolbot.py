@@ -41,7 +41,7 @@ class PriceBot:
         if new_price is not None and self.current_price is not None and abs(new_price - self.current_price) >= 1:
             self.current_price = new_price
             for chat_id in self.subscribers:
-                context.bot.send_message(chat_id=chat_id, text=f'Цена на АИ-95 изменилась: {new_price}')
+                context.bot.send_message(chat_id=chat_id, text=f'Средняя цена на бензин АИ-95 изменилась: {new_price}')
         elif self.current_price is None:
             self.current_price = new_price
 
@@ -50,7 +50,7 @@ class PriceBot:
         chat_id = update.effective_chat.id  # Сохраняем chat_id
         price = self.get_price()
         if price is not None:
-            context.bot.send_message(chat_id=chat_id, text=f'Актуальная цена на АИ-95: {price}')
+            context.bot.send_message(chat_id=chat_id, text=f'Актуальная средняя цена на бензин АИ-95 в Санкт-Петербурге составляет: {price}')
         else:
             context.bot.send_message(chat_id=chat_id, text='Не удалось получить цену.')
 
