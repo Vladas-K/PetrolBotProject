@@ -41,12 +41,13 @@ class PriceBot:
     def check_price_change(self, context):
         """Проверка изменения цены и отправка уведомлений подписчикам"""
         new_price = self.get_price()
+        diff_price = abs(new_price - self.current_price)
         # if new_price is not None and self.current_price is not None and abs(new_price - self.current_price) >= 1:
-        if new_price is not None and self.current_price is not None and abs(new_price - self.current_price) >= 0.1:
+        if new_price is not None and self.current_price is not None and diff_price >= 0.01:
             self.current_price = new_price
             for chat_id in self.subscribers:
                 context.bot.send_message(
-                    chat_id=chat_id, text=f'Средняя цена на бензин АИ-95 изменилась: {new_price}')
+                    chat_id=chat_id, text=f'Средняя цена на бензин АИ-95 изменилась на {diff_price} и составляет {new_price}')
         elif self.current_price is None:
             self.current_price = new_price
 
