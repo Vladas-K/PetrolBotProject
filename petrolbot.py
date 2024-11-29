@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from telegram import Bot, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
+import sqlite3
 
 # Загрузка переменных окружения из файла .env
 load_dotenv()
@@ -18,8 +19,19 @@ class PriceBot:
         self.bot = Bot(token=token)  # Инициализация бота
         self.application = Application.builder().token(token).build()  # Инициализация Application
         self.current_price = None  # Текущая цена
-        self.subscribers = set()  # Множество для хранения chat_id подписчиков
+        self.init_db()  # Инициализация базы данных
         self.init_handlers()  # Инициализация обработчиков
+
+    def init_db(self):
+        """Инициализация базы данных и таблицы подписчиков"""
+        self.conn = sqlite3.connect('subscribers.db')
+        self.cursor = self.conn.cursor()
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS subscribers (
+                chat_id INTEGER PRIMARY KEY
+            )
+        ''')
+        self.conn.commit()
 
     def get_price(self):
         """Получение текущей цены на топливо с сайта"""
@@ -30,8 +42,7 @@ class PriceBot:
             response.raise_for_status()  # Проверка на ошибки HTTP
             soup = BeautifulSoup(response.text, 'lxml')
             ai_95_block = soup.find('div', class_='fuel-card border-ai92')
-            price = float(ai_95_block.find(
-                'span', itemprop='price').text.replace(',', '.'))
+            price = float(ai_95_block.find('span', itemprop='price').text.replace(',', '.'))
             return price
         except Exception as e:
             logging.error(f"Ошибка при получении цены: {e}")
@@ -44,7 +55,9 @@ class PriceBot:
             diff_price = abs(new_price - self.current_price)
             if diff_price >= 0.01:
                 self.current_price = new_price
-                for chat_id in self.subscribers:
+                self.cursor.execute('SELECT chat_id FROM subscribers')
+                subscribers = self.cursor.fetchall()
+                for (chat_id,) in subscribers:
                     await context.bot.send_message(
                         chat_id=chat_id, text=f'Средняя цена на бензин АИ-95 изменилась на {diff_price} и составляет {new_price} р.')
         elif self.current_price is None:
@@ -52,7 +65,7 @@ class PriceBot:
 
     async def send_price(self, update, context):
         """Отправка текущей цены пользователю"""
-        chat_id = update.effective_chat.id  # Сохраняем chat_id
+        chat_id = update.effective_chat.id
         price = self.get_price()
         if price is not None:
             await context.bot.send_message(
@@ -65,11 +78,14 @@ class PriceBot:
         """Обработка команды /start, добавление подписчика и отправка приветственного сообщения"""
         chat = update.effective_chat
         name = update.message.chat.first_name
-        self.subscribers.add(chat.id)  # Добавляем chat_id в список подписчиков
-        button = ReplyKeyboardMarkup(
-            [['Узнать актуальную цену']], resize_keyboard=True)
+        chat_id = chat.id
+
+        self.cursor.execute('INSERT OR IGNORE INTO subscribers (chat_id) VALUES (?)', (chat_id,))
+        self.conn.commit()
+
+        button = ReplyKeyboardMarkup([['Узнать актуальную цену']], resize_keyboard=True)
         await context.bot.send_message(
-            chat_id=chat.id,
+            chat_id=chat_id,
             text=f'Спасибо, что вы включили меня, {name}!',
             reply_markup=button
         )
@@ -98,6 +114,8 @@ class PriceBot:
     def run(self):
         """Запуск бота"""
         self.application.run_polling()
+        self.conn.close()
+
 
 if __name__ == '__main__':
     bot = PriceBot(secret_token)
