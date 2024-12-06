@@ -57,6 +57,7 @@ class PriceBot:
         new_price = self.get_price()
         if new_price is not None and self.current_price is not None:
             diff_price = abs(new_price - self.current_price)
+            diff_price = round(diff_price, 2)
             if diff_price >= 0.01:
                 self.current_price = new_price
                 self.cursor.execute('SELECT chat_id FROM subscribers')
