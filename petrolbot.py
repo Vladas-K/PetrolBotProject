@@ -13,7 +13,6 @@ load_dotenv()
 # Получение токена бота из переменных окружения
 secret_token = os.getenv('TOKEN')
 
-
 class PriceBot:
     def __init__(self, token):
         self.bot = Bot(token=token)  # Инициализация бота
@@ -35,6 +34,23 @@ class PriceBot:
             )
         ''')
         self.conn.commit()
+
+    def add_subscriber(self, chat_id, first_name, subscribed_date):
+        """Добавление новой записи в базу данных подписчиков"""
+        self.cursor.execute('''
+            INSERT OR IGNORE INTO subscribers (chat_id, first_name, subscribed_date)
+            VALUES (?, ?, ?)
+        ''', (chat_id, first_name, subscribed_date))
+        self.conn.commit()
+
+    def process_update(self, update):
+        """Обработка данных из обновления"""
+        chat = update.effective_chat
+        name = update.message.chat.first_name if update.message.chat.first_name else "Unknown"
+        chat_id = chat.id
+        subscribed_date = update.message.date.isoformat() if update.message.date else "Unknown"
+        self.add_subscriber(chat_id, name, subscribed_date)
+        return chat_id, name
 
     def get_price(self):
         """Получение текущей цены на топливо с сайта"""
@@ -81,20 +97,9 @@ class PriceBot:
 
     async def start(self, update, context):
         """Обработка команды /start, добавление подписчика и отправка приветственного сообщения"""
-        chat = update.effective_chat
-        name = update.message.chat.first_name if update.message.chat.first_name else "Unknown"
-        chat_id = chat.id
-        subscribed_date = update.message.date.isoformat(
-        ) if update.message.date else "Unknown"
-
-        self.cursor.execute('''
-            INSERT OR IGNORE INTO subscribers (chat_id, first_name, subscribed_date)
-            VALUES (?, ?, ?)
-        ''', (chat_id, name, subscribed_date))
-        self.conn.commit()
-
-        button = ReplyKeyboardMarkup(
-            [['Узнать актуальную цену']], resize_keyboard=True)
+        chat_id, name = self.process_update(update)
+        
+        button = ReplyKeyboardMarkup([['Узнать актуальную цену']], resize_keyboard=True)
         await context.bot.send_message(
             chat_id=chat_id,
             text=f'Спасибо, что вы включили меня, {name}!',
@@ -105,6 +110,7 @@ class PriceBot:
         """Обработка текстовых сообщений и отправка соответствующего ответа"""
         text = update.message.text
         if text == 'Узнать актуальную цену':
+            self.process_update(update)
             await self.send_price(update, context)
         else:
             await context.bot.send_message(chat_id=update.effective_chat.id,

@@ -169,4 +169,4 @@ oldfiles/
 .vscode/
 subscribers.db
 
-
+.DS_Store
