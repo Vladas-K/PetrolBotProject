@@ -7,10 +7,8 @@ from telegram import Bot, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import sqlite3
 
-# Загрузка переменных окружения из файла .env
 load_dotenv()
 
-# Получение токена бота из переменных окружения
 secret_token = os.getenv('TOKEN')
 
 class PriceBot:
