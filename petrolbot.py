@@ -10,20 +10,22 @@ import sqlite3
 
 load_dotenv()
 
+# Получение абсолютного пути к рабочей директории
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 secret_token = os.getenv('TOKEN')
 
 # Настройка ротации логов
-handler = RotatingFileHandler('bot.log', maxBytes=50000000, backupCount=2)
+handler = RotatingFileHandler(os.path.join(BASE_DIR, 'bot.log'), maxBytes=50000000, backupCount=2)
 handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 
 # Настройка общего логирования
 logging.basicConfig(
-    level=logging.INFO,  # Заменил 'filename' на 'level'
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[handler]  # Указал обработчик
+    handlers=[handler]
 )
 
-# Создание фильтра для исключения ненужных сообщений
 class HTTPRequestsFilter(logging.Filter):
     def filter(self, record):
         return 'HTTP Request' not in record.getMessage()
@@ -32,7 +34,6 @@ class HTTPRequestsFilter(logging.Filter):
 http_logger = logging.getLogger("httpx")
 http_logger.setLevel(logging.ERROR)
 http_logger.addFilter(HTTPRequestsFilter())
-
 
 class PriceBot:
     def __init__(self, token):
@@ -45,7 +46,7 @@ class PriceBot:
 
     def init_db(self):
         """Инициализация базы данных и таблицы подписчиков"""
-        self.conn = sqlite3.connect('subscribers.db')
+        self.conn = sqlite3.connect(os.path.join(BASE_DIR, 'subscribers.db'))
         self.cursor = self.conn.cursor()
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS subscribers (
@@ -158,7 +159,6 @@ class PriceBot:
         """Запуск бота"""
         self.application.run_polling()
         self.conn.close()
-
 
 if __name__ == '__main__':
     bot = PriceBot(secret_token)
