@@ -1,5 +1,6 @@
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -11,11 +12,15 @@ load_dotenv()
 
 secret_token = os.getenv('TOKEN')
 
+# Настройка ротации логов
+handler = RotatingFileHandler('bot.log', maxBytes=50000000, backupCount=2)
+handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
 # Настройка общего логирования
 logging.basicConfig(
-    filename='bot.log', 
-    level=logging.INFO, 
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO,  # Заменил 'filename' на 'level'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[handler]  # Указал обработчик
 )
 
 # Создание фильтра для исключения ненужных сообщений
@@ -23,10 +28,11 @@ class HTTPRequestsFilter(logging.Filter):
     def filter(self, record):
         return 'HTTP Request' not in record.getMessage()
 
-# Настройка логирования только для библиотеки httpx
+# Настройка логирования для библиотеки httpx
 http_logger = logging.getLogger("httpx")
 http_logger.setLevel(logging.ERROR)
 http_logger.addFilter(HTTPRequestsFilter())
+
 
 class PriceBot:
     def __init__(self, token):
