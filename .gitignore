@@ -170,3 +170,5 @@ oldfiles/
 subscribers.db
 
 .DS_Store
+
+bot.log

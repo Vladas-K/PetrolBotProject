@@ -11,14 +11,31 @@ load_dotenv()
 
 secret_token = os.getenv('TOKEN')
 
+# Настройка общего логирования
+logging.basicConfig(
+    filename='bot.log', 
+    level=logging.INFO, 
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Создание фильтра для исключения ненужных сообщений
+class HTTPRequestsFilter(logging.Filter):
+    def filter(self, record):
+        return 'HTTP Request' not in record.getMessage()
+
+# Настройка логирования только для библиотеки httpx
+http_logger = logging.getLogger("httpx")
+http_logger.setLevel(logging.ERROR)
+http_logger.addFilter(HTTPRequestsFilter())
+
 class PriceBot:
     def __init__(self, token):
-        self.bot = Bot(token=token)  # Инициализация бота
-        self.application = Application.builder().token(
-            token).build()  # Инициализация Application
-        self.current_price = None  # Текущая цена
-        self.init_db()  # Инициализация базы данных
-        self.init_handlers()  # Инициализация обработчиков
+        self.bot = Bot(token=token)
+        self.application = Application.builder().token(token).build()
+        self.current_price = None
+        self.init_db()
+        self.init_handlers()
+        logging.info('Бот инициализирован')
 
     def init_db(self):
         """Инициализация базы данных и таблицы подписчиков"""
@@ -32,6 +49,7 @@ class PriceBot:
             )
         ''')
         self.conn.commit()
+        logging.info('База данных инициализирована')
 
     def add_subscriber(self, chat_id, first_name, subscribed_date):
         """Добавление новой записи в базу данных подписчиков"""
@@ -40,6 +58,7 @@ class PriceBot:
             VALUES (?, ?, ?)
         ''', (chat_id, first_name, subscribed_date))
         self.conn.commit()
+        logging.info(f'Подписчик добавлен: {first_name} ({chat_id})')
 
     def process_update(self, update):
         """Обработка данных из обновления"""
@@ -48,6 +67,7 @@ class PriceBot:
         chat_id = chat.id
         subscribed_date = update.message.date.isoformat() if update.message.date else "Unknown"
         self.add_subscriber(chat_id, name, subscribed_date)
+        logging.info(f'Обновление обработано: {name} ({chat_id})')
         return chat_id, name
 
     def get_price(self):
@@ -56,11 +76,11 @@ class PriceBot:
             header = {'User-Agent': 'BMW'}
             url = 'https://fuelprices.ru/szfo/speterburg'
             response = requests.get(url, headers=header)
-            response.raise_for_status()  # Проверка на ошибки HTTP
+            response.raise_for_status()
             soup = BeautifulSoup(response.text, 'lxml')
             ai_95_block = soup.find('div', class_='fuel-card border-ai92')
-            price = float(ai_95_block.find(
-                'span', itemprop='price').text.replace(',', '.'))
+            price = float(ai_95_block.find('span', itemprop='price').text.replace(',', '.'))
+            logging.info(f'Цена получена: {price} р.')
             return price
         except Exception as e:
             logging.error(f"Ошибка при получении цены: {e}")
