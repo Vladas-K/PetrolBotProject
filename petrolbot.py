@@ -60,15 +60,18 @@ class PriceBot:
         logging.info('База данных инициализирована')
 
     def add_subscriber(self, chat_id, first_name, subscribed_date):
-        """Добавление новой записи в базу данных подписчиков с преобразованием даты в человекочитаемый формат"""
-        readable_date = datetime.fromisoformat(subscribed_date).strftime("%d %B %Y")
-        
-        self.cursor.execute('''
-            INSERT OR IGNORE INTO subscribers (chat_id, first_name, subscribed_date)
-            VALUES (?, ?, ?)
-        ''', (chat_id, first_name, readable_date))
-        self.conn.commit()
-        logging.info(f'Подписчик добавлен: {first_name} ({chat_id}) на дату {readable_date}')
+        """Добавление новой записи в базу данных подписчиков"""
+        date = datetime.fromisoformat(subscribed_date).strftime("%d %B %Y")
+    
+        #Проверка, существует ли подписчик в базе данных
+        self.cursor.execute('SELECT * FROM subscribers WHERE chat_id = ?', (chat_id,))
+        if not self.cursor.fetchone():
+            self.cursor.execute('''
+                INSERT INTO subscribers (chat_id, first_name, subscribed_date)
+                VALUES (?, ?, ?)
+            ''', (chat_id, first_name, date))
+            self.conn.commit()
+            logging.info(f'Подписчик добавлен: {first_name} ({chat_id}) на дату {date}')
 
     def process_update(self, update):
         """Обработка данных из обновления"""
