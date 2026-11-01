@@ -168,7 +168,7 @@ oldfiles/
 .oldfiles
 .vscode/
 subscribers.db
-
+.env.test
 .DS_Store
-
+subscribers.test.db*
 bot.log

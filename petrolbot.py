@@ -37,17 +37,19 @@ http_logger.setLevel(logging.ERROR)
 http_logger.addFilter(HTTPRequestsFilter())
 
 class PriceBot:
-    def __init__(self, token):
+    def __init__(self, token, db_path=None):
         self.bot = Bot(token=token)
         self.application = Application.builder().token(token).build()
         self.current_price = None
+        self.db_path = (os.path.join(BASE_DIR, 'subscribers.db')
+                        if db_path is None else db_path)
         self.init_db()
         self.init_handlers()
         logging.info('Бот инициализирован')
 
     def init_db(self):
         """Инициализация базы данных и таблицы подписчиков"""
-        self.conn = sqlite3.connect(os.path.join(BASE_DIR, 'subscribers.db'))
+        self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS subscribers (
@@ -86,15 +88,32 @@ class PriceBot:
     def get_price(self):
         """Получение текущей цены на топливо с сайта"""
         try:
-            header = {'User-Agent': 'BMW'}
-            url = 'https://fuelprices.ru/szfo/speterburg'
-            response = requests.get(url, headers=header)
+            header = {'User-Agent': 'PetrolBot/1.0'}
+            url = 'https://www.petrolplus.ru/fuelindex/gorod-sankt-peterburg/'
+            response = requests.get(url, headers=header, timeout=(5, 15))
             response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'lxml')
-            ai_95_block = soup.find('div', class_='fuel-card border-ai92')
-            price = float(ai_95_block.find('span', itemprop='price').text.replace(',', '.'))
-            logging.info(f'Цена получена: {price} р.')
-            return price
+            soup = BeautifulSoup(response.text, 'html.parser')
+            for table in soup.find_all('table'):
+                headers = [cell.get_text(strip=True)
+                           for cell in table.find_all('th')]
+                if 'Регион' not in headers or 'АИ-95' not in headers:
+                    continue
+                region_column = headers.index('Регион')
+                price_column = headers.index('АИ-95')
+                for row in table.find_all('tr'):
+                    cells = row.find_all('td', recursive=False)
+                    if len(cells) <= max(region_column, price_column):
+                        continue
+                    region = ' '.join(cells[region_column].stripped_strings)
+                    if region != 'г. Санкт-Петербург':
+                        continue
+                    value = cells[price_column].get_text(strip=True)
+                    price = float(value.replace(',', '.'))
+                    if not 0 < price < float('inf'):
+                        raise ValueError('Некорректная цена АИ-95')
+                    logging.info(f'Цена получена: {price} р.')
+                    return price
+            raise ValueError('Цена АИ-95 для Санкт-Петербурга не найдена')
         except Exception as e:
             logging.error(f"Ошибка при получении цены: {e}")
             return None
