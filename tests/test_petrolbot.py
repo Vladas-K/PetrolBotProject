@@ -12,44 +12,57 @@ class GetPriceTests(unittest.TestCase):
         # Не создаём Application и не открываем базу подписчиков.
         self.bot = PriceBot.__new__(PriceBot)
 
-    def fetch(self, html):
+    def fetch(self, html, city='Санкт-Петербурге'):
+        html = f'<h1>Цены на бензин в {city} сегодня</h1>' + html
         response = Mock(text=html)
         with patch('petrolbot.requests.get', return_value=response) as get:
             result = self.bot.get_price()
         get.assert_called_once_with(
-            'https://www.petrolplus.ru/fuelindex/gorod-sankt-peterburg/',
-            headers={'User-Agent': 'PetrolBot/1.0'}, timeout=(5, 15))
+            'https://benzinstatus.ru/sankt-peterburg/ceny/',
+            headers={'User-Agent': 'Mozilla/5.0'}, timeout=(5, 15))
         response.raise_for_status.assert_called_once_with()
         return result
 
-    def test_selects_city_and_fuel_by_header(self):
+    def test_selects_ai95_average_instead_of_median_or_other_fuel(self):
         html = '''<table>
-            <tr><th>Регион</th><th>АИ-92</th><th>АИ-95</th><th>ДТ</th></tr>
-            <tr><td>Ленинградская область</td><td>66</td><td>71</td><td>81</td></tr>
-            <tr><td><span>г. Санкт-Петербург</span></td>
-                <td>65.47</td><td><div>70.6</div></td><td>80.57</td></tr>
+            <thead><tr><th>Топливо</th><th>Медиана</th><th>Средняя</th></tr></thead>
+            <tbody>
+            <tr><td><b>АИ-92</b></td><td>67,20 ₽</td><td>67,14 ₽</td></tr>
+            <tr><td><b>АИ-95+</b></td><td>75,00 ₽</td><td>75,10 ₽</td></tr>
+            <tr><td><b>АИ-95</b></td><td><b>72,30 ₽</b></td><td>72,60 ₽</td></tr>
+            </tbody>
         </table>'''
-        self.assertEqual(self.fetch(html), 70.6)
+        self.assertEqual(self.fetch(html), 72.6)
 
-    def test_reordered_columns_and_decimal_comma(self):
+    def test_reordered_columns_and_nonbreaking_spaces(self):
         html = '''<table>
-            <tr><th>АИ-95</th><th>Регион</th><th>АИ-92</th></tr>
-            <tr><td>70,60</td><td>г. Санкт-Петербург</td><td>65.47</td></tr>
+            <tr><th>Средняя</th><th>Топливо</th><th>Медиана</th></tr>
+            <tr><td><span>72.60</span>&nbsp;₽</td><td>АИ-95</td><td>72,30 ₽</td></tr>
         </table>'''
-        self.assertEqual(self.fetch(html), 70.6)
+        self.assertEqual(self.fetch(html), 72.6)
+
+    def test_other_city_is_rejected(self):
+        html = '''<table><tr><th>Топливо</th><th>Средняя</th></tr>
+            <tr><td>АИ-95</td><td>75,00 ₽</td></tr></table>'''
+        with self.assertLogs(level='ERROR'):
+            self.assertIsNone(self.fetch(html, city='Москве'))
 
     def test_missing_or_changed_markup_returns_none(self):
         for html in ('<html>Service unavailable</html>', '''<table>
-                <tr><th>Регион</th><th>АИ-95</th></tr>
-                <tr><td>Ленинградская область</td><td>71</td></tr>
+                <tr><th>Топливо</th><th>Медиана</th></tr>
+                <tr><td>АИ-95</td><td>72,30 ₽</td></tr>
+                </table>''', '''<table>
+                <tr><th>Топливо</th><th>Средняя</th></tr>
+                <tr><td>АИ-95+</td><td>75,00 ₽</td></tr>
+                <tr><td>АИ-95</td></tr>
                 </table>'''):
             with self.subTest(html=html), self.assertLogs(level='ERROR'):
                 self.assertIsNone(self.fetch(html))
 
     def test_invalid_price_returns_none(self):
         for value in ('0', '-1', 'nan', 'inf', '—'):
-            html = f'''<table><tr><th>Регион</th><th>АИ-95</th></tr>
-                <tr><td>г. Санкт-Петербург</td><td>{value}</td></tr></table>'''
+            html = f'''<table><tr><th>Топливо</th><th>Средняя</th></tr>
+                <tr><td>АИ-95</td><td>{value} ₽</td></tr></table>'''
             with self.subTest(value=value), self.assertLogs(level='ERROR'):
                 self.assertIsNone(self.fetch(html))
 

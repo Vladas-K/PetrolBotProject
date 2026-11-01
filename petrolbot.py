@@ -88,26 +88,30 @@ class PriceBot:
     def get_price(self):
         """Получение текущей цены на топливо с сайта"""
         try:
-            header = {'User-Agent': 'PetrolBot/1.0'}
-            url = 'https://www.petrolplus.ru/fuelindex/gorod-sankt-peterburg/'
+            header = {'User-Agent': 'Mozilla/5.0'}
+            url = 'https://benzinstatus.ru/sankt-peterburg/ceny/'
             response = requests.get(url, headers=header, timeout=(5, 15))
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
+            heading = soup.find('h1')
+            if heading is None or 'Санкт-Петербурге' not in heading.get_text(' ', strip=True):
+                raise ValueError('Не найдена страница цен Санкт-Петербурга')
             for table in soup.find_all('table'):
                 headers = [cell.get_text(strip=True)
                            for cell in table.find_all('th')]
-                if 'Регион' not in headers or 'АИ-95' not in headers:
+                if 'Топливо' not in headers or 'Средняя' not in headers:
                     continue
-                region_column = headers.index('Регион')
-                price_column = headers.index('АИ-95')
+                fuel_column = headers.index('Топливо')
+                price_column = headers.index('Средняя')
                 for row in table.find_all('tr'):
                     cells = row.find_all('td', recursive=False)
-                    if len(cells) <= max(region_column, price_column):
+                    if len(cells) <= max(fuel_column, price_column):
                         continue
-                    region = ' '.join(cells[region_column].stripped_strings)
-                    if region != 'г. Санкт-Петербург':
+                    fuel = cells[fuel_column].get_text(strip=True)
+                    if fuel != 'АИ-95':
                         continue
-                    value = cells[price_column].get_text(strip=True)
+                    value = cells[price_column].get_text(' ', strip=True)
+                    value = ''.join(value.replace('₽', '').split())
                     price = float(value.replace(',', '.'))
                     if not 0 < price < float('inf'):
                         raise ValueError('Некорректная цена АИ-95')
