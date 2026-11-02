@@ -172,3 +172,4 @@ subscribers.db
 .DS_Store
 subscribers.test.db*
 bot.log
+/assets/
